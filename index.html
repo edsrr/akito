@@ -1,0 +1,492 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>あさがおPOSレジ</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+/* Layout: tablet POS — header bar, product grid left, ticket panel right; stacks on phones */
+:root{
+  --bg:#eef1f4; --surface:#ffffff; --surface2:#f5f7f9; --line:#d9dee4;
+  --fg:#1d2733; --muted:#66727f;
+  --accent:#1f6fb2; --accent-fg:#ffffff; --accent-soft:#e3eef8;
+  --go:#1f9a5c; --go-fg:#fff; --warn:#c8442f; --warn-soft:#fbe9e6;
+  --bar:#22303e; --bar-fg:#e8eef4;
+  --c1:#e6f0fa; --c2:#fdf0e1; --c3:#e8f6ee; --c4:#f6e9f3; --c5:#efeefa;
+  --font:"Zen Kaku Gothic New","Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#141a21; --surface:#1d252e; --surface2:#232c37; --line:#323d4a;
+  --fg:#e5ebf1; --muted:#93a0ad; --accent:#4b9be0; --accent-fg:#0b1620; --accent-soft:#1d3247;
+  --go:#3bb878; --go-fg:#07150d; --warn:#ef7462; --warn-soft:#3a201c;
+  --bar:#0e1419; --bar-fg:#dbe3ea;
+  --c1:#1e2c3b; --c2:#33291c; --c3:#1c3127; --c4:#30202c; --c5:#25243a; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#141a21; --surface:#1d252e; --surface2:#232c37; --line:#323d4a;
+  --fg:#e5ebf1; --muted:#93a0ad; --accent:#4b9be0; --accent-fg:#0b1620; --accent-soft:#1d3247;
+  --go:#3bb878; --go-fg:#07150d; --warn:#ef7462; --warn-soft:#3a201c;
+  --bar:#0e1419; --bar-fg:#dbe3ea;
+  --c1:#1e2c3b; --c2:#33291c; --c3:#1c3127; --c4:#30202c; --c5:#25243a; color-scheme:dark}
+html,body{height:100%}
+body{background:var(--bg);color:var(--fg);font-family:var(--font);display:flex;flex-direction:column}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bar)}
+button{font:inherit;color:inherit;cursor:pointer;border:0;background:none}
+button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+header{background:var(--bar);color:var(--bar-fg);display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+  padding-block:8px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.brand{font-weight:900;font-size:17px;letter-spacing:.04em;display:flex;align-items:center;gap:8px}
+.brand i{width:22px;height:22px;border-radius:50%;background:radial-gradient(circle at 50% 50%,#fff 0 18%,#5aa0e0 19% 100%);display:inline-block}
+.store{font-size:12px;opacity:.75;line-height:1.3}
+nav{display:flex;gap:4px;margin-left:auto}
+nav button{padding:8px 14px;border-radius:6px;font-weight:700;font-size:14px;color:var(--bar-fg);opacity:.7}
+nav button[aria-pressed="true"]{background:rgba(255,255,255,.12);opacity:1}
+.clock{font-size:13px;opacity:.85}
+
+main{flex:1;min-height:0;display:flex;
+  padding-block:12px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.view{flex:1;min-height:0;display:flex;gap:12px}
+
+/* products */
+.products{flex:1;min-width:0;display:flex;flex-direction:column;gap:10px}
+.cats{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px}
+.cats button{flex:none;padding:9px 16px;border-radius:999px;background:var(--surface);border:1px solid var(--line);font-weight:700;font-size:14px}
+.cats button[aria-pressed="true"]{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+.search{display:flex;gap:8px}
+.search input{flex:1;min-width:0;padding:10px 12px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--fg);font:inherit}
+.grid{flex:1;min-height:0;overflow:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px;align-content:start}
+.item{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px;text-align:left;display:flex;flex-direction:column;gap:6px;min-height:96px;position:relative}
+.item:active{transform:scale(.98)}
+.item .sw{position:absolute;inset:0 0 auto 0;height:5px;border-radius:10px 10px 0 0}
+.item b{font-size:15px;line-height:1.35;font-weight:700;margin-top:4px}
+.item .desc{font-size:12px;line-height:1.5;color:var(--muted)}
+.item .p{margin-top:auto;display:flex;justify-content:space-between;align-items:baseline;font-size:15px}
+.tag{font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;background:var(--surface2);color:var(--muted);border:1px solid var(--line)}
+
+/* ticket */
+.ticket{width:min(380px,40%);flex:none;background:var(--surface);border:1px solid var(--line);border-radius:12px;display:flex;flex-direction:column;min-height:0}
+.thead{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid var(--line)}
+.thead h2{font-size:15px;margin:0}
+.thead small{color:var(--muted);font-size:12px}
+.lines{flex:1;min-height:120px;overflow:auto}
+.line{display:grid;grid-template-columns:1fr auto;gap:2px 8px;padding:10px 14px;border-bottom:1px solid var(--line)}
+.line .nm{font-weight:700;font-size:14px;min-width:0}
+.line .amt{text-align:right;font-size:15px}
+.line .ctl{grid-column:1/-1;display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+.qty{display:flex;align-items:center;border:1px solid var(--line);border-radius:6px;overflow:hidden;margin-left:auto}
+.qty button{width:30px;height:28px;font-size:16px;font-weight:700;background:var(--surface2)}
+.qty span{min-width:30px;text-align:center;font-size:14px;color:var(--fg)}
+.del{color:var(--warn);font-weight:700;padding:4px 6px}
+.empty{color:var(--muted);text-align:center;padding:40px 16px;font-size:14px;line-height:1.7}
+.sum{padding:10px 14px;border-top:1px solid var(--line);display:grid;gap:4px;font-size:13px;background:var(--surface2)}
+.sum div{display:flex;justify-content:space-between}
+.sum .disc{color:var(--warn)}
+.total{display:flex;justify-content:space-between;align-items:baseline;padding:10px 14px}
+.total span{font-weight:700}
+.total strong{font-size:30px;font-weight:600}
+.acts{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;padding:0 14px 8px}
+.acts button{padding:10px 4px;border-radius:8px;background:var(--surface2);border:1px solid var(--line);font-size:13px;font-weight:700}
+.pay{margin:0 14px 14px;padding:16px;border-radius:10px;background:var(--go);color:var(--go-fg);font-size:18px;font-weight:900;letter-spacing:.1em}
+.pay:disabled{opacity:.4;cursor:not-allowed}
+
+/* modal */
+.scrim{position:fixed;inset:0;background:rgba(10,16,22,.55);display:flex;align-items:center;justify-content:center;z-index:20;
+  padding:max(16px,env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) max(16px,env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
+.modal{background:var(--surface);border-radius:14px;width:min(760px,100%);max-height:100%;overflow:auto;display:flex;flex-direction:column}
+.mh{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid var(--line)}
+.mh h3{margin:0;font-size:17px}
+.x{font-size:22px;width:36px;height:36px;border-radius:8px;color:var(--muted)}
+.mb{padding:16px 18px;display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.methods{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.methods button{padding:12px 6px;border-radius:8px;border:2px solid var(--line);font-weight:700;font-size:14px;background:var(--surface2)}
+.methods button[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft)}
+.readout{display:grid;gap:6px;margin-top:12px}
+.readout div{display:flex;justify-content:space-between;align-items:baseline;padding:8px 12px;border-radius:8px;background:var(--surface2)}
+.readout .big{font-size:24px}
+.readout .chg{background:var(--accent-soft)}
+.readout .short{background:var(--warn-soft);color:var(--warn)}
+.keys{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.keys button{padding:14px 0;border-radius:8px;background:var(--surface2);border:1px solid var(--line);font-family:var(--mono);font-size:18px;font-weight:600}
+.keys .q{font-family:var(--font);font-size:13px;font-weight:700;background:var(--accent-soft)}
+.keys .clr{color:var(--warn);font-family:var(--font);font-size:14px}
+.confirm{grid-column:1/-1;padding:16px;border-radius:10px;background:var(--go);color:var(--go-fg);font-size:18px;font-weight:900;letter-spacing:.1em}
+.confirm:disabled{opacity:.4;cursor:not-allowed}
+.note{font-size:12px;color:var(--muted);margin-top:8px;line-height:1.6}
+
+/* receipt */
+.receipt{background:#fffefa;color:#222;font-family:var(--mono);font-size:12.5px;line-height:1.55;padding:20px 18px;margin:16px auto;width:min(300px,100%);
+  box-shadow:0 2px 10px rgba(0,0,0,.15);border-top:6px dotted #ddd}
+.receipt .c{text-align:center}
+.receipt .r{display:flex;justify-content:space-between;gap:8px}
+.receipt hr{border:0;border-top:1px dashed #999;margin:6px 0}
+.receipt .tt{font-size:17px;font-weight:600}
+.mf{padding:0 18px 18px;display:flex;gap:8px}
+.mf button{flex:1;padding:14px;border-radius:10px;font-weight:900;font-size:16px}
+.primary{background:var(--accent);color:var(--accent-fg)}
+.ghost{background:var(--surface2);border:1px solid var(--line)}
+
+/* history & report */
+.panel{flex:1;min-width:0;background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:auto;padding:16px}
+.panel h2{margin:0 0 12px;font-size:17px}
+.tbl{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th,td{padding:10px 8px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+th{font-size:12px;color:var(--muted);font-weight:700}
+td.n,th.n{text-align:right}
+.pill{font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;background:var(--accent-soft);color:var(--accent)}
+.pill.void{background:var(--warn-soft);color:var(--warn)}
+tr.voided td{color:var(--muted);text-decoration:line-through}
+tr.voided td:last-child,tr.voided td:nth-child(5){text-decoration:none}
+.lnk{color:var(--accent);font-weight:700;font-size:13px;padding:4px 6px}
+.lnk.w{color:var(--warn)}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-bottom:18px}
+.tile{padding:14px;border-radius:10px;background:var(--surface2);border:1px solid var(--line)}
+.tile small{display:block;color:var(--muted);font-size:12px;font-weight:700;letter-spacing:.04em}
+.tile b{font-size:24px;font-weight:600}
+.bars{display:grid;gap:8px;margin-bottom:18px}
+.bar{display:grid;grid-template-columns:96px 1fr 100px;gap:10px;align-items:center;font-size:13px}
+.bar .track{height:12px;background:var(--surface2);border-radius:6px;overflow:hidden;border:1px solid var(--line)}
+.bar .fill{height:100%;background:var(--accent)}
+.bar .v{text-align:right}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--bar);color:var(--bar-fg);padding:10px 18px;border-radius:8px;font-size:14px;font-weight:700;z-index:30}
+.disc-box{display:grid;gap:10px}
+.disc-box .row{display:flex;gap:6px;flex-wrap:wrap}
+.disc-box .row button{flex:1;min-width:70px;padding:12px;border-radius:8px;border:1px solid var(--line);background:var(--surface2);font-weight:700}
+.disc-box input{padding:12px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--fg);font:inherit;font-family:var(--mono);font-size:18px;width:100%}
+
+@media (max-width:760px){
+  main{overflow:auto}
+  .view{flex-direction:column;min-height:auto}
+  .ticket{width:100%}
+  .grid{max-height:none;overflow:visible;grid-template-columns:repeat(auto-fill,minmax(110px,1fr))}
+  .mb{grid-template-columns:1fr}
+  nav{margin-left:0;order:3;width:100%}
+  nav button{flex:1}
+  .bar{grid-template-columns:72px 1fr 84px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+#printArea{display:none}
+@page{size:100mm 148mm;margin:6mm}
+@media print{
+  :root{padding:0!important}
+  html,body{height:auto;background:#fff!important}
+  body::before,header,main,.scrim,.toast{display:none!important}
+  #printArea{display:block!important}
+  #printArea .receipt{width:88mm;margin:0 auto;padding:0;box-shadow:none;border-top:0;font-size:10pt;line-height:1.5;color:#000;background:#fff}
+  #printArea .receipt .tt{font-size:14pt}
+}
+</style>
+
+<header>
+  <div class="brand"><i></i>あさがおPOS</div>
+  <div class="store">居酒屋 こおり 本店<br>担当: 中村（レジ1）</div>
+  <nav>
+    <button id="tab-reg" aria-pressed="true" data-view="reg">会計</button>
+    <button id="tab-his" aria-pressed="false" data-view="his">取引履歴</button>
+    <button id="tab-rep" aria-pressed="false" data-view="rep">点検・精算</button>
+  </nav>
+  <div class="clock num" id="clock"></div>
+</header>
+
+<main>
+  <section class="view" id="v-reg">
+    <div class="products">
+      <div class="cats" id="cats"></div>
+      <div class="search"><input id="q" type="search" placeholder="商品名・商品コードで検索" aria-label="商品検索"></div>
+      <div class="grid" id="grid"></div>
+    </div>
+    <aside class="ticket">
+      <div class="thead">
+        <div><h2>お会計</h2><small id="tno"></small></div>
+        <div style="display:flex;gap:4px">
+          <button class="lnk" id="eatin" aria-pressed="true">店内</button>
+          <button class="lnk" id="clear">全取消</button>
+        </div>
+      </div>
+      <div class="lines" id="lines"></div>
+      <div class="sum">
+        <div><span>小計（<span id="cnt">0</span>点）</span><span class="num" id="sub">¥0</span></div>
+        <div class="disc" id="discRow" hidden><span id="discLbl">値引</span><span class="num" id="disc"></span></div>
+        <div><span>（内消費税 10%）</span><span class="num" id="t10">¥0</span></div>
+        <div><span>（内消費税 8%）</span><span class="num" id="t8">¥0</span></div>
+      </div>
+      <div class="total"><span>合計</span><strong class="num" id="tot">¥0</strong></div>
+      <div class="acts">
+        <button id="bDisc">小計値引</button>
+        <button id="bHold">保留</button>
+        <button id="bRecall">呼出</button>
+      </div>
+      <button class="pay" id="bPay" disabled>会計する</button>
+    </aside>
+  </section>
+
+  <section class="view" id="v-his" hidden>
+    <div class="panel">
+      <h2>取引履歴</h2>
+      <div class="tbl"><table>
+        <thead><tr><th>取引No.</th><th>時刻</th><th class="n">点数</th><th class="n">合計</th><th>支払方法</th><th></th></tr></thead>
+        <tbody id="hist"></tbody>
+      </table></div>
+    </div>
+  </section>
+
+  <section class="view" id="v-rep" hidden>
+    <div class="panel" id="report"></div>
+  </section>
+</main>
+
+<div class="scrim" id="modal" hidden><div class="modal" id="mbox" role="dialog" aria-modal="true"></div></div>
+<div class="toast" id="toast" hidden></div>
+<div id="printArea"></div>
+
+<script>
+const CATS=[
+ {id:"all",name:"すべて",c:"--c5"},{id:"food",name:"料理",c:"--c2"},
+ {id:"drink",name:"ドリンク",c:"--c1"},{id:"sweets",name:"甘味",c:"--c4"}];
+const P=[
+ ["001","food","名物 氷煮込み（牛すじ）",580,1,"氷温熟成牛すじと特製出汁のトロトロ煮込み。"],
+ ["002","drink","氷結生レモンサワー",450,2,"削りレモン氷がたっぷり載った究極のサワー。"],
+ ["003","food","極寒〆氷盛り刺身（五種）",1200,1,"氷温熟成で旨味が引き立った新鮮刺身盛り。"],
+ ["004","food","氷熟成 厚切り豚角煮",880,1,"ほろほろ解ける厚切り豚バラの贅沢角煮。"],
+ ["005","sweets","特製〆の削り氷",480,1,"ゆめるん喫茶へ引き継がれた伝説のかき氷。"]
+].map(([code,cat,name,price,food,desc])=>({code,cat,name,price,food,desc}));
+// food: 1=飲食料品(店内10%/持帰り8%) 0=飲食料品(常に8%) 2=標準税率10%（酒類）
+
+const yen=n=>(n<0?"-¥":"¥")+Math.abs(Math.round(n)).toLocaleString("ja-JP");
+const $=id=>document.getElementById(id);
+const S={cat:"all",q:"",cart:[],eatIn:true,disc:null,held:null,next:1042,
+  hist:[],cash:30000,payMethod:"現金",tendered:""};
+
+function rate(p){if(p.food===2)return 10;if(p.food===0)return 8;return S.eatIn?10:8}
+
+function calc(cart=S.cart,disc=S.disc,eatIn=S.eatIn){
+  let sub=0,by={10:0,8:0},cnt=0;
+  cart.forEach(l=>{const p=P.find(x=>x.code===l.code);const r=p.food===2?10:p.food===0?8:(eatIn?10:8);
+    const a=p.price*l.qty;sub+=a;by[r]+=a;cnt+=l.qty});
+  let d=0;
+  if(disc){d=disc.type==="pct"?Math.floor(sub*disc.v/100):Math.min(disc.v,sub)}
+  // 値引を税率ごとに按分
+  const ratio=sub?(sub-d)/sub:0;
+  const g10=Math.round(by[10]*ratio), g8=(sub-d)-g10;
+  return {sub,d,total:sub-d,cnt,t10:Math.floor(g10*10/110),t8:Math.floor(g8*8/108),g10,g8};
+}
+
+function renderCats(){
+  $("cats").innerHTML=CATS.map(c=>`<button data-c="${c.id}" aria-pressed="${!S.q&&S.cat===c.id}">${c.name}</button>`).join("");
+}
+function renderGrid(){
+  const q=S.q.trim();
+  const list=q?P.filter(p=>p.name.includes(q)||p.code.includes(q.toLowerCase())):P.filter(p=>S.cat==="all"||p.cat===S.cat);
+  $("grid").innerHTML=list.length?list.map(p=>{
+    const c=CATS.find(x=>x.id===p.cat).c;
+    return `<button class="item" data-code="${p.code}"><span class="sw" style="background:var(${c})"></span>
+      <b>${p.name}</b><span class="desc">${p.desc}</span><span class="p"><span class="tag">${rate(p)===8?"軽8%":"10%"}</span><span class="num">${yen(p.price)}</span></span></button>`}).join("")
+    :`<div class="empty">「${q}」に一致する商品はありません</div>`;
+}
+function renderTicket(){
+  $("tno").textContent="取引No. "+String(S.next).padStart(6,"0");
+  $("eatin").textContent=S.eatIn?"店内":"持帰り";
+  $("lines").innerHTML=S.cart.length?S.cart.map((l,i)=>{const p=P.find(x=>x.code===l.code);
+    return `<div class="line"><span class="nm">${p.name}${rate(p)===8?' <span class="tag">軽</span>':''}</span>
+      <span class="amt num">${yen(p.price*l.qty)}</span>
+      <div class="ctl"><span class="num">@${yen(p.price)}</span><button class="del" data-del="${i}">削除</button>
+      <div class="qty"><button data-m="${i}" aria-label="減らす">−</button><span class="num">${l.qty}</span><button data-p="${i}" aria-label="増やす">＋</button></div></div></div>`}).join("")
+    :`<div class="empty">左の商品をタップして<br>お会計に追加します</div>`;
+  const t=calc();
+  $("cnt").textContent=t.cnt;$("sub").textContent=yen(t.sub);
+  $("discRow").hidden=!S.disc;
+  if(S.disc){$("discLbl").textContent=S.disc.type==="pct"?`小計値引 ${S.disc.v}%`:"小計値引";$("disc").textContent=yen(-t.d)}
+  $("t10").textContent=yen(t.t10);$("t8").textContent=yen(t.t8);$("tot").textContent=yen(t.total);
+  $("bPay").disabled=!S.cart.length;
+  $("bRecall").disabled=!S.held;$("bRecall").style.opacity=S.held?1:.45;
+  $("bRecall").textContent=S.held?"呼出（1）":"呼出";
+}
+function renderAll(){renderCats();renderGrid();renderTicket()}
+
+function add(code){const l=S.cart.find(x=>x.code===code);l?l.qty++:S.cart.push({code,qty:1});renderTicket();
+  const el=$("lines");el.scrollTop=el.scrollHeight}
+
+$("cats").onclick=e=>{const b=e.target.closest("button");if(!b)return;S.cat=b.dataset.c;S.q="";$("q").value="";renderCats();renderGrid()};
+$("q").oninput=e=>{S.q=e.target.value;renderCats();renderGrid()};
+$("grid").onclick=e=>{const b=e.target.closest(".item");if(b)add(b.dataset.code)};
+$("lines").onclick=e=>{const t=e.target.closest("button");if(!t)return;
+  if(t.dataset.p!=null)S.cart[t.dataset.p].qty++;
+  if(t.dataset.m!=null){const l=S.cart[t.dataset.m];if(--l.qty<=0)S.cart.splice(t.dataset.m,1)}
+  if(t.dataset.del!=null)S.cart.splice(t.dataset.del,1);
+  if(!S.cart.length)S.disc=null;renderTicket()};
+$("clear").onclick=()=>{if(!S.cart.length)return;S.cart=[];S.disc=null;renderTicket();toast("取引を取り消しました")};
+$("eatin").onclick=()=>{S.eatIn=!S.eatIn;renderAll();toast(S.eatIn?"店内飲食（10%）に切替":"持帰り（軽減8%）に切替")};
+$("bHold").onclick=()=>{if(!S.cart.length)return toast("保留する商品がありません");if(S.held)return toast("保留は1件までです");
+  S.held={cart:S.cart,disc:S.disc,eatIn:S.eatIn};S.cart=[];S.disc=null;renderTicket();toast("取引を保留しました")};
+$("bRecall").onclick=()=>{if(!S.held)return;if(S.cart.length)return toast("現在の取引を終えてから呼び出してください");
+  Object.assign(S,{cart:S.held.cart,disc:S.held.disc,eatIn:S.held.eatIn,held:null});renderAll();toast("保留取引を呼び出しました")};
+
+/* modal helpers */
+function openModal(html){$("mbox").innerHTML=html;$("modal").hidden=false}
+function closeModal(){$("modal").hidden=true}
+$("modal").onclick=e=>{if(e.target.id==="modal"||e.target.closest(".x"))closeModal()};
+document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!$("modal").hidden)closeModal()});
+
+/* discount */
+$("bDisc").onclick=()=>{if(!S.cart.length)return toast("先に商品を追加してください");
+  openModal(`<div class="mh"><h3>小計値引</h3><button class="x" aria-label="閉じる">×</button></div>
+  <div class="mb" style="grid-template-columns:1fr"><div class="disc-box">
+    <div class="row">${[5,10,20,30].map(v=>`<button data-pct="${v}">${v}%引</button>`).join("")}</div>
+    <div class="row">${[50,100,500].map(v=>`<button data-yen="${v}">${v}円引</button>`).join("")}</div>
+    <label for="dyen" style="font-size:13px;font-weight:700">金額を入力して値引</label>
+    <input id="dyen" type="number" inputmode="numeric" min="0" placeholder="例: 120">
+    <div class="row"><button id="dapply" class="primary" style="background:var(--accent);color:var(--accent-fg)">適用</button><button id="doff">値引を解除</button></div>
+  </div></div>`);
+  $("mbox").onclick=e=>{const b=e.target.closest("button");if(!b)return;
+    if(b.dataset.pct)S.disc={type:"pct",v:+b.dataset.pct};
+    else if(b.dataset.yen)S.disc={type:"yen",v:+b.dataset.yen};
+    else if(b.id==="dapply"){const v=+$("dyen").value;if(!(v>0))return toast("値引額を入力してください");S.disc={type:"yen",v}}
+    else if(b.id==="doff")S.disc=null; else return;
+    closeModal();renderTicket()}};
+
+/* checkout */
+const METHODS=["現金","クレジット","交通系IC","QRコード決済"];
+$("bPay").onclick=()=>{S.payMethod="現金";S.tendered="";drawPay()};
+function drawPay(){
+  const t=calc(),cash=S.payMethod==="現金",ten=cash?(+S.tendered||0):t.total,chg=ten-t.total;
+  openModal(`<div class="mh"><h3>お支払い</h3><button class="x" aria-label="閉じる">×</button></div>
+  <div class="mb">
+    <div>
+      <div class="methods">${METHODS.map(m=>`<button data-meth="${m}" aria-pressed="${S.payMethod===m}">${m}</button>`).join("")}</div>
+      <div class="readout">
+        <div><span>合計</span><span class="num big">${yen(t.total)}</span></div>
+        <div><span>お預り</span><span class="num big">${yen(ten)}</span></div>
+        <div class="${chg<0?'short':'chg'}"><span>${chg<0?'不足':'お釣り'}</span><span class="num big">${yen(Math.abs(chg))}</span></div>
+      </div>
+      ${cash?'':`<p class="note">${S.payMethod}は端末で決済した想定です。確定するとお会計が完了します。</p>`}
+    </div>
+    <div class="keys" ${cash?'':'style="opacity:.35;pointer-events:none"'}>
+      ${["7","8","9","ちょうど","4","5","6","1,000","1","2","3","5,000","0","00","C","10,000"].map(k=>
+        `<button data-k="${k}" class="${isNaN(k)&&k!=='C'?'q':''}${k==='C'?' clr':''}">${k}</button>`).join("")}
+    </div>
+    <button class="confirm" id="fix" ${chg<0?'disabled':''}>会計を確定する</button>
+  </div>`);
+  $("mbox").onclick=e=>{const b=e.target.closest("button");if(!b)return;
+    if(b.dataset.meth){S.payMethod=b.dataset.meth;S.tendered="";return drawPay()}
+    const k=b.dataset.k;if(k){
+      if(k==="C")S.tendered="";else if(k==="ちょうど")S.tendered=String(t.total);
+      else if(k.includes(","))S.tendered=String((+S.tendered||0)+ +k.replace(",",""));
+      else if(S.tendered.length<7)S.tendered=(S.tendered+k).replace(/^0+(?=\d)/,"");
+      return drawPay()}
+    if(b.id==="fix")finish()}}
+
+function finish(){
+  const t=calc(),cash=S.payMethod==="現金",ten=cash?+S.tendered:t.total;
+  const rec={no:S.next++,time:new Date(),lines:S.cart.map(l=>({...l})),disc:S.disc,eatIn:S.eatIn,t,method:S.payMethod,ten,chg:ten-t.total,void:false};
+  S.hist.unshift(rec);if(cash)S.cash+=t.total;
+  S.cart=[];S.disc=null;renderTicket();showReceipt(rec,true);
+}
+function receiptHTML(r){
+  const d=r.time,pad=n=>String(n).padStart(2,"0");
+  const ts=`${d.getFullYear()}年${pad(d.getMonth()+1)}月${pad(d.getDate())}日 ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const lines=r.lines.map(l=>{const p=P.find(x=>x.code===l.code);const lt=(p.food===2?10:p.food===0?8:(r.eatIn?10:8))===8?"※":"";
+    return `<div class="r"><span>${lt}${p.name}</span><span>${yen(p.price*l.qty)}</span></div>${l.qty>1?`<div class="r" style="padding-left:1em;color:#666"><span>@${yen(p.price)} × ${l.qty}</span></div>`:""}`}).join("");
+  return `<div class="receipt">${r.void?'<div class="c" style="color:#c8442f;font-weight:700">＊＊ 取消 ＊＊</div>':''}
+    <div class="c" style="font-size:15px;font-weight:600">居酒屋 こおり 本店</div>
+    <div class="c">福岡市中央区天神2-0-0<br>TEL 092-000-0000</div><hr>
+    <div>${ts}</div><div class="r"><span>レジ1 担当:中村</span><span>No.${String(r.no).padStart(6,"0")}</span></div>
+    <div>${r.eatIn?"店内飲食":"お持ち帰り"}</div><hr>${lines}<hr>
+    <div class="r"><span>小計 ${r.t.cnt}点</span><span>${yen(r.t.sub)}</span></div>
+    ${r.t.d?`<div class="r"><span>小計値引</span><span>${yen(-r.t.d)}</span></div>`:""}
+    <div class="r tt"><span>合計</span><span>${yen(r.t.total)}</span></div>
+    <div class="r"><span>(10%対象</span><span>${yen(r.t.g10)})</span></div>
+    <div class="r"><span>(内消費税等</span><span>${yen(r.t.t10)})</span></div>
+    <div class="r"><span>(8%対象</span><span>${yen(r.t.g8)})</span></div>
+    <div class="r"><span>(内消費税等</span><span>${yen(r.t.t8)})</span></div><hr>
+    <div class="r"><span>${r.method}</span><span>${yen(r.ten)}</span></div>
+    ${r.method==="現金"?`<div class="r"><span>お釣り</span><span>${yen(r.chg)}</span></div>`:""}
+    <hr><div>※は軽減税率対象商品</div>
+    <div>登録番号 T0000000000000</div>
+    <div class="c" style="margin-top:6px">ご来店ありがとうございました</div></div>`;
+}
+function showReceipt(r,fresh){
+  openModal(`<div class="mh"><h3>${fresh?(r.method==="現金"?`お釣り ${yen(r.chg)}`:"お会計完了"):"レシート再表示"}</h3><button class="x" aria-label="閉じる">×</button></div>
+    ${receiptHTML(r)}<div class="mf"><button class="ghost" id="prt">はがきサイズで印刷</button><button class="primary x" style="width:auto;height:auto;color:var(--accent-fg)">${fresh?"次のお客様へ":"閉じる"}</button></div>`);
+  $("prt").onclick=()=>printReceipt(r);
+}
+function printReceipt(r){
+  $("printArea").innerHTML=receiptHTML(r);
+  let opened=false;const mark=()=>{opened=true};
+  window.addEventListener("beforeprint",mark,{once:true});
+  try{window.print()}catch(e){}
+  setTimeout(()=>{window.removeEventListener("beforeprint",mark);
+    if(!opened)toast("この画面では印刷できません。HTMLファイルをブラウザで開いてください")},600);
+}
+
+/* history */
+function renderHist(){
+  const pad=n=>String(n).padStart(2,"0");
+  $("hist").innerHTML=S.hist.length?S.hist.map((r,i)=>`<tr class="${r.void?'voided':''}">
+    <td class="num">${String(r.no).padStart(6,"0")}</td><td class="num">${pad(r.time.getHours())}:${pad(r.time.getMinutes())}</td>
+    <td class="n num">${r.t.cnt}</td><td class="n num">${yen(r.t.total)}</td>
+    <td><span class="pill ${r.void?'void':''}">${r.void?'取消済':r.method}</span></td>
+    <td><button class="lnk" data-show="${i}">レシート</button>${r.void?'':`<button class="lnk w" data-void="${i}">取消</button>`}</td></tr>`).join("")
+    :`<tr><td colspan="6" class="empty">まだ取引がありません</td></tr>`;
+}
+$("hist").onclick=e=>{const b=e.target.closest("button");if(!b)return;
+  if(b.dataset.show)showReceipt(S.hist[b.dataset.show],false);
+  if(b.dataset.void){const r=S.hist[b.dataset.void];
+    openModal(`<div class="mh"><h3>取引を取り消しますか？</h3><button class="x" aria-label="閉じる">×</button></div>
+      <div style="padding:16px 18px;line-height:1.7">取引No.${String(r.no).padStart(6,"0")}（${yen(r.t.total)}・${r.method}）を取り消します。売上から差し引かれます。</div>
+      <div class="mf"><button class="ghost x" style="width:auto;height:auto;color:var(--fg)">やめる</button><button class="primary" id="dov" style="background:var(--warn);color:#fff">取消する</button></div>`);
+    $("dov").onclick=()=>{r.void=true;if(r.method==="現金")S.cash-=r.t.total;closeModal();renderHist();toast("取引を取り消しました")}}};
+
+/* report */
+function renderReport(){
+  const live=S.hist.filter(r=>!r.void),sum=live.reduce((a,r)=>a+r.t.total,0);
+  const byM=METHODS.map(m=>({m,v:live.filter(r=>r.method===m).reduce((a,r)=>a+r.t.total,0)}));
+  const max=Math.max(1,...byM.map(x=>x.v));
+  const cat={};live.forEach(r=>{const ratio=r.t.sub?r.t.total/r.t.sub:0;r.lines.forEach(l=>{const p=P.find(x=>x.code===l.code);cat[p.cat]=(cat[p.cat]||0)+p.price*l.qty*ratio})});
+  const cmax=Math.max(1,...Object.values(cat));
+  const t10=live.reduce((a,r)=>a+r.t.t10,0),t8=live.reduce((a,r)=>a+r.t.t8,0),disc=live.reduce((a,r)=>a+r.t.d,0);
+  $("report").innerHTML=`<h2>点検（${new Date().toLocaleDateString("ja-JP")}）</h2>
+  <div class="tiles">
+    <div class="tile"><small>総売上</small><b class="num">${yen(sum)}</b></div>
+    <div class="tile"><small>客数</small><b class="num">${live.length}</b> 人</div>
+    <div class="tile"><small>客単価</small><b class="num">${yen(live.length?sum/live.length:0)}</b></div>
+    <div class="tile"><small>ドロアー内現金</small><b class="num">${yen(S.cash)}</b><small style="font-weight:400;margin-top:2px">釣銭準備金 ¥30,000 含む</small></div>
+  </div>
+  <h2 style="font-size:15px">支払方法別</h2>
+  <div class="bars">${byM.map(x=>`<div class="bar"><span>${x.m}</span><div class="track"><div class="fill" style="width:${x.v/max*100}%"></div></div><span class="v num">${yen(x.v)}</span></div>`).join("")}</div>
+  <h2 style="font-size:15px">部門別</h2>
+  <div class="bars">${CATS.map(c=>{const v=Math.round(cat[c.id]||0);return `<div class="bar"><span>${c.name}</span><div class="track"><div class="fill" style="width:${v/cmax*100}%"></div></div><span class="v num">${yen(v)}</span></div>`}).join("")}</div>
+  <div class="tbl"><table><tbody>
+    <tr><td>内消費税 10%</td><td class="n num">${yen(t10)}</td></tr>
+    <tr><td>内消費税 8%（軽減）</td><td class="n num">${yen(t8)}</td></tr>
+    <tr><td>値引合計</td><td class="n num">${yen(-disc)}</td></tr>
+    <tr><td>取消件数</td><td class="n num">${S.hist.length-live.length} 件</td></tr>
+  </tbody></table></div>
+  <p class="note">これはデモ画面です。実際の売上や決済とは連動していません。</p>`;
+}
+
+/* tabs */
+document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>{
+  document.querySelectorAll("nav button").forEach(x=>x.setAttribute("aria-pressed",x===b));
+  ["reg","his","rep"].forEach(v=>$("v-"+v).hidden=v!==b.dataset.view);
+  if(b.dataset.view==="his")renderHist();if(b.dataset.view==="rep")renderReport()});
+
+let tt;function toast(m){const t=$("toast");t.textContent=m;t.hidden=false;clearTimeout(tt);tt=setTimeout(()=>t.hidden=true,1800)}
+function tick(){const d=new Date(),p=n=>String(n).padStart(2,"0");$("clock").textContent=`${d.getMonth()+1}/${d.getDate()} ${p(d.getHours())}:${p(d.getMinutes())}`}
+setInterval(tick,10000);tick();
+
+/* サンプル取引（デモ用） */
+(function seed(){
+  const mk=(lines,eatIn,method,mins,disc=null)=>{const t=calc(lines,disc,eatIn);const ten=method==="現金"?Math.ceil(t.total/1000)*1000:t.total;
+    S.hist.unshift({no:S.next++,time:new Date(Date.now()-mins*60000),lines,disc,eatIn,t,method,ten,chg:ten-t.total,void:false});if(method==="現金")S.cash+=t.total};
+  mk([{code:"002",qty:2},{code:"001",qty:2}],true,"現金",95);
+  mk([{code:"003",qty:1},{code:"002",qty:3},{code:"004",qty:1}],true,"クレジット",72);
+  mk([{code:"004",qty:2},{code:"001",qty:1}],false,"QRコード決済",50);
+  mk([{code:"002",qty:4},{code:"003",qty:2},{code:"005",qty:2}],true,"交通系IC",31);
+  mk([{code:"005",qty:3}],true,"現金",12,{type:"pct",v:10});
+  S.cart=[{code:"002",qty:2},{code:"001",qty:1},{code:"005",qty:1}];
+})();
+renderAll();
+</script>
+
+</body></html>
