@@ -166,16 +166,8 @@ tr.voided td:last-child,tr.voided td:nth-child(5){text-decoration:none}
   .bar{grid-template-columns:72px 1fr 84px}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
-#printArea{display:none}
-@page{size:100mm 148mm;margin:6mm}
-@media print{
-  :root{padding:0!important}
-  html,body{height:auto;background:#fff!important}
-  body::before,header,main,.scrim,.toast{display:none!important}
-  #printArea{display:block!important}
-  #printArea .receipt{width:88mm;margin:0 auto;padding:0;box-shadow:none;border-top:0;font-size:10pt;line-height:1.5;color:#000;background:#fff}
-  #printArea .receipt .tt{font-size:14pt}
-}
+.rimg{display:block;width:min(300px,100%);margin:16px auto;box-shadow:0 2px 10px rgba(0,0,0,.15)}
+.rhint{text-align:center;font-size:12px;color:var(--muted);margin:-6px 18px 12px}
 </style>
 
 <header>
@@ -238,7 +230,6 @@ tr.voided td:last-child,tr.voided td:nth-child(5){text-decoration:none}
 
 <div class="scrim" id="modal" hidden><div class="modal" id="mbox" role="dialog" aria-modal="true"></div></div>
 <div class="toast" id="toast" hidden></div>
-<div id="printArea"></div>
 
 <script>
 const CATS=[
@@ -407,16 +398,69 @@ function receiptHTML(r){
 }
 function showReceipt(r,fresh){
   openModal(`<div class="mh"><h3>${fresh?(r.method==="現金"?`お釣り ${yen(r.chg)}`:"お会計完了"):"レシート再表示"}</h3><button class="x" aria-label="閉じる">×</button></div>
-    ${receiptHTML(r)}<div class="mf"><button class="ghost" id="prt">はがきサイズで印刷</button><button class="primary x" style="width:auto;height:auto;color:var(--accent-fg)">${fresh?"次のお客様へ":"閉じる"}</button></div>`);
-  $("prt").onclick=()=>printReceipt(r);
+    <div id="rview">${receiptHTML(r)}</div><div class="mf"><button class="ghost" id="prt">レシート画像を保存</button><button class="primary x" style="width:auto;height:auto;color:var(--accent-fg)">${fresh?"次のお客様へ":"閉じる"}</button></div>`);
+  $("prt").onclick=()=>saveReceipt(r);
 }
-function printReceipt(r){
-  $("printArea").innerHTML=receiptHTML(r);
-  let opened=false;const mark=()=>{opened=true};
-  window.addEventListener("beforeprint",mark,{once:true});
-  try{window.print()}catch(e){}
-  setTimeout(()=>{window.removeEventListener("beforeprint",mark);
-    if(!opened)toast("この画面では印刷できません。HTMLファイルをブラウザで開いてください")},600);
+
+/* レシートをPNG画像に描画 */
+function receiptRows(r){
+  const d=r.time,pad=n=>String(n).padStart(2,"0"),R=[];
+  const ts=`${d.getFullYear()}年${pad(d.getMonth()+1)}月${pad(d.getDate())}日 ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  if(r.void)R.push({c:"＊＊ 取消 ＊＊",color:"#c8442f",b:1});
+  R.push({c:"居酒屋 こおり 本店",size:17,b:1},{c:"福岡市中央区天神2-0-0"},{c:"TEL 092-000-0000"},{hr:1},
+    {l:ts},{l:"レジ１ 担当:中村",r:"No."+String(r.no).padStart(6,"0")},{l:r.eatIn?"店内飲食":"お持ち帰り"},{hr:1});
+  r.lines.forEach(l=>{const p=P.find(x=>x.code===l.code);const lt=(p.food===2?10:p.food===0?8:(r.eatIn?10:8))===8?"※":"";
+    R.push({l:lt+p.name,r:yen(p.price*l.qty)});if(l.qty>1)R.push({l:`  @${yen(p.price)} × ${l.qty}`,color:"#666"})});
+  R.push({hr:1},{l:`小計 ${r.t.cnt}点`,r:yen(r.t.sub)});
+  if(r.t.d)R.push({l:"小計値引",r:yen(-r.t.d)});
+  R.push({l:"合計",r:yen(r.t.total),size:19,b:1},
+    {l:"(10%対象",r:yen(r.t.g10)+")"},{l:"(内消費税等",r:yen(r.t.t10)+")"},
+    {l:"(8%対象",r:yen(r.t.g8)+")"},{l:"(内消費税等",r:yen(r.t.t8)+")"},{hr:1},
+    {l:r.method,r:yen(r.ten)});
+  if(r.method==="現金")R.push({l:"お釣り",r:yen(r.chg)});
+  R.push({hr:1},{l:"※は軽減税率対象商品"},{l:"登録番号 T0000000000000"},{gap:6},{c:"ご来店ありがとうございました"});
+  return R;
+}
+async function receiptPNG(r){
+  try{await document.fonts.ready}catch(e){}
+  const W=320,PADX=20,PADY=24,S=3,LH=1.6,rows=receiptRows(r);
+  const font=(sz,b)=>`${b?600:500} ${sz}px "IBM Plex Mono","Zen Kaku Gothic New","Hiragino Kaku Gothic ProN","Yu Gothic",monospace`;
+  let H=PADY*2;rows.forEach(x=>H+=x.hr?13:x.gap?x.gap:(x.size||13)*LH);
+  const cv=document.createElement("canvas");cv.width=W*S;cv.height=Math.ceil(H)*S;
+  const g=cv.getContext("2d");g.scale(S,S);
+  g.fillStyle="#fffefa";g.fillRect(0,0,W,H);
+  let y=PADY;
+  rows.forEach(x=>{
+    if(x.hr){g.strokeStyle="#999";g.setLineDash([3,3]);g.lineWidth=1;g.beginPath();g.moveTo(PADX,y+6.5);g.lineTo(W-PADX,y+6.5);g.stroke();y+=13;return}
+    if(x.gap){y+=x.gap;return}
+    const sz=x.size||13,lh=sz*LH;g.font=font(sz,x.b);g.fillStyle=x.color||"#222";g.textBaseline="middle";
+    const my=y+lh/2;
+    if(x.c!=null){g.textAlign="center";g.fillText(x.c,W/2,my)}
+    else{g.textAlign="left";g.fillText(x.l,PADX,my);if(x.r!=null){g.textAlign="right";g.fillText(x.r,W-PADX,my)}}
+    y+=lh});
+  return new Promise(res=>cv.toBlob(res,"image/png"));
+}
+let saving=false;
+async function saveReceipt(r){
+  if(saving)return;saving=true;
+  try{
+    const blob=await receiptPNG(r),name=`receipt_${String(r.no).padStart(6,"0")}.png`;
+    const dl=window.claude?await window.claude.use("downloads"):null;
+    if(dl){
+      try{await dl.save({filename:name,data:blob});toast("レシート画像を保存しました")}
+      catch(e){if(e&&e.code==="declined")toast("保存をキャンセルしました");
+        else if(e&&e.code==="rate_limited")toast("少し待ってからもう一度お試しください");
+        else showImage(blob)}
+    }else{
+      // Claudeの外（ローカルで開いた場合など）
+      const url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();
+      showImage(blob);
+    }
+  }finally{saving=false}
+}
+function showImage(blob){
+  const v=$("rview");if(!v)return;
+  v.innerHTML=`<img class="rimg" alt="レシート画像" src="${URL.createObjectURL(blob)}"><p class="rhint">画像を長押し／右クリックして保存できます</p>`;
 }
 
 /* history */
